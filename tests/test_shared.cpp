@@ -34,7 +34,6 @@ int main() {
     assert(m.vertices.size() == 6 && m.alphas.size() == 6 && m.triangles.size() == 24);
     assert(std::fabs(m.alphas[0] - 0.5f) < 1e-4 && std::fabs(m.alphas[4] - 1.0f) < 1e-4);
     for (int t : m.triangles) assert(t >= 0 && t < 6);
-    assert(m.uAge.size() == 6 && std::fabs(m.uAge[0] - 0.5f) < 1e-4 && std::fabs(m.uAge[5]) < 1e-4);   // texture u: 0 = newest
     auto half = h.build(0.2f, 0.5f, 0.4f);
     assert(std::fabs(half.vertices[1].z - 0.5f) < 1e-4);
     auto pruned = h.build(0.55f, 1.0f, 0.4f);

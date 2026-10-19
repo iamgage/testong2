@@ -1,6 +1,6 @@
 #include "saber_loader.hpp"
 #include "log.hpp"
-#include "pc_saber_unity.hpp"
+#include "saber_bundle.hpp"
 
 #include <fstream>
 #include <filesystem>
@@ -20,9 +20,7 @@
 #include "UnityEngine/Mesh.hpp"
 #include "UnityEngine/Material.hpp"
 #include "UnityEngine/Color.hpp"
-#include "UnityEngine/Vector2.hpp"
 #include "UnityEngine/Vector3.hpp"
-#include "UnityEngine/Shader.hpp"
 #include "UnityEngine/Quaternion.hpp"
 #include "UnityEngine/Time.hpp"
 #include "GlobalNamespace/SaberType.hpp"
@@ -47,7 +45,6 @@ static std::string g_loadedName;   // name of the bundle currently loaded ("" = 
 static SafePtrUnity<UnityEngine::AssetBundle> g_bundle;
 static SafePtrUnity<UnityEngine::GameObject>  g_prefab;
 static SafePtrUnity<UnityEngine::Material>    g_trailMat;
-static bool g_pcMode = false;      // true = selected saber is a PC bundle rebuilt by pcunity (not an Android AssetBundle)
 
 const Config& config() { return g_cfg; }
 
@@ -74,7 +71,6 @@ static std::string readFile(const std::string& p) {
 static void unloadBundle() {
     if (g_bundle) { g_bundle->Unload(false); }   // false = keep already-instantiated objects alive
     g_bundle.emplace(nullptr); g_prefab.emplace(nullptr); g_trailMat.emplace(nullptr);
-    pcunity::unload(); g_pcMode = false;
     g_loadedName.clear();
 }
 
@@ -97,25 +93,23 @@ bool prepareSelection() {
     g_cfg = parseConfig(readFile(kCfgFile));
 
     if (!g_cfg.enabled || g_cfg.selected.empty()) { if (!g_loadedName.empty()) unloadBundle(); return false; }
-    if (g_cfg.selected == g_loadedName && (g_pcMode ? pcunity::loaded() : (g_bundle && g_prefab))) return true;
+    if (g_cfg.selected == g_loadedName && g_bundle && g_prefab) return true;
 
     unloadBundle();
     auto list = discoverSabers(kSabers);
     int idx = indexOfName(list, g_cfg.selected);
     if (idx < 0) { SFQ_ERR("Saber '%s' not found in %s", g_cfg.selected.c_str(), kSabers.c_str()); return false; }
 
+    const auto info = inspectBundle(list[idx].path);
+    if (!info.unityFS) {
+        SFQ_ERR("Invalid saber file '%s': %s", list[idx].path.c_str(), info.error.c_str());
+        return false;
+    }
+    SFQ_LOG("UnityFS saber '%s' built with Unity %s (platform not identifiable from header)",
+            list[idx].path.c_str(), info.unityVersion.c_str());
     UnityEngine::AssetBundle* bundle = UnityEngine::AssetBundle::LoadFromFile(StringW(list[idx].path));
     if (!bundle) {
-        // Not an Android bundle -> try it as a PC (Windows) saber: parse it ourselves and rebuild it from Unity objects.
-        SFQ_LOG("'%s' is not loadable as an Android bundle; trying PC saber converter", list[idx].path.c_str());
-        std::string err;
-        if (pcunity::load(list[idx].path, kDir, err)) {
-            g_pcMode = true;
-            g_loadedName = g_cfg.selected;
-            SFQ_LOG("Loaded PC saber '%s'", g_loadedName.c_str());
-            return true;
-        }
-        SFQ_ERR("Could not load '%s' as an Android bundle or as a PC saber: %s", list[idx].path.c_str(), err.c_str());
+        SFQ_ERR("LoadFromFile failed for %s (bundle must be built for Android/ASTC, not PC)", list[idx].path.c_str());
         return false;
     }
     g_bundle.emplace(bundle);
@@ -162,45 +156,26 @@ static void hideVanilla(GlobalNamespace::SaberModelController* c) {
     if (trail && *trail) (*trail)->set_enabled(false);
 }
 
-// Shader of the vanilla saber, used as a last-resort shader for PC saber materials.
-static UnityEngine::Shader* vanillaShader(GlobalNamespace::SaberModelController* c) {
-    auto renderers = c->GetComponentsInChildren<UnityEngine::MeshRenderer*>(true);
-    for (auto* r : renderers) {
-        if (!r) continue;
-        UnityEngine::Material* m = r->get_sharedMaterial();
-        if (!m) continue;
-        UnityEngine::Shader* s = m->get_shader();
-        if (s) return s;
-    }
-    return nullptr;
-}
-
 void equip(GlobalNamespace::SaberModelController* controller, GlobalNamespace::Saber* saber) {
-    if (!controller || !saber) return;
-    if (g_pcMode ? !pcunity::loaded() : (!g_prefab || !g_prefab.isAlive())) return;
+    if (!controller || !saber || !g_prefab || !g_prefab.isAlive()) return;
     const int hi = handIndex(saber);
+    const char* childName = hi == 0 ? kLeftName : kRightName;
 
-    UnityEngine::Transform* child = nullptr;
-    UnityEngine::GameObject* root = nullptr;   // Android bundle only: the instantiated prefab root (destroyed after re-parenting)
-    if (g_pcMode) {
-        child = pcunity::instantiateHand(hi, controller->get_gameObject()->get_layer(), vanillaShader(controller));
-        if (!child) { SFQ_ERR("PC saber: could not build hand %d", hi); return; }
-    } else {
-        const char* childName = hi == 0 ? kLeftName : kRightName;
-        try {
-            UnityEngine::Object* o = il2cpp_utils::RunMethodRethrow<UnityEngine::Object*, false>(
-                classof(UnityEngine::Object*), "Instantiate", reinterpret_cast<UnityEngine::Object*>(g_prefab.ptr()));
-            root = reinterpret_cast<UnityEngine::GameObject*>(o);
-        } catch (...) {
-            root = nullptr;
-        }
-        if (!root) { SFQ_ERR("Instantiate failed"); return; }
-        child = root->get_transform()->Find(StringW(childName));
-        if (!child) {
-            SFQ_ERR("Prefab has no child '%s'", childName);
-            UnityEngine::Object::Destroy(root);
-            return;
-        }
+    UnityEngine::GameObject* root = nullptr;
+    try {
+        UnityEngine::Object* o = il2cpp_utils::RunMethodRethrow<UnityEngine::Object*, false>(
+            classof(UnityEngine::Object*), "Instantiate", reinterpret_cast<UnityEngine::Object*>(g_prefab.ptr()));
+        root = reinterpret_cast<UnityEngine::GameObject*>(o);
+    } catch (...) {
+        root = nullptr;
+    }
+    if (!root) { SFQ_ERR("Instantiate failed"); return; }
+
+    UnityEngine::Transform* child = root->get_transform()->Find(StringW(childName));
+    if (!child) {
+        SFQ_ERR("Prefab has no child '%s'", childName);
+        UnityEngine::Object::Destroy(root);
+        return;
     }
 
     hideVanilla(controller);
@@ -209,23 +184,21 @@ void equip(GlobalNamespace::SaberModelController* controller, GlobalNamespace::S
     child->SetParent(parent, false);
     child->set_localPosition(UnityEngine::Vector3::get_zero());
     child->set_localRotation(UnityEngine::Quaternion::get_identity());
-    if (root) UnityEngine::Object::Destroy(root);   // drop the other hand + prefab root; child was re-parented
+    UnityEngine::Object::Destroy(root);   // drop the other hand + prefab root; child was re-parented
 
     // ---- trail ----
     Hand& h = g_hands[hi];
     destroyTrail(h);
-    UnityEngine::Material* trailMat = g_pcMode ? pcunity::trailMaterial(hi)
-                                               : ((g_trailMat && g_trailMat.isAlive()) ? g_trailMat.ptr() : nullptr);
-    if (g_cfg.trailEnabled && trailMat) {
+    if (g_cfg.trailEnabled && g_trailMat && g_trailMat.isAlive()) {
         UnityEngine::GameObject* go = UnityEngine::GameObject::New_ctor(StringW(hi == 0 ? "SFQTrailL" : "SFQTrailR"));
         UnityEngine::MeshFilter* mf = go->AddComponent<UnityEngine::MeshFilter*>();
         UnityEngine::MeshRenderer* mr = go->AddComponent<UnityEngine::MeshRenderer*>();
         UnityEngine::Mesh* mesh = UnityEngine::Mesh::New_ctor();
         mf->set_sharedMesh(mesh);
-        mr->set_sharedMaterial(trailMat);
+        mr->set_sharedMaterial(g_trailMat.ptr());
         h.trailGO.emplace(go); h.mesh.emplace(mesh); h.saber = saber;
     }
-    SFQ_LOG("Equipped %s saber on hand %d", g_pcMode ? "PC" : "custom", hi);
+    SFQ_LOG("Equipped custom saber on hand %d", hi);
 }
 
 void tickTrail(GlobalNamespace::Saber* saber) {
@@ -244,17 +217,14 @@ void tickTrail(GlobalNamespace::Saber* saber) {
 
     ArrayW<UnityEngine::Vector3> verts(data.vertices.size());
     ArrayW<UnityEngine::Color>   cols(data.vertices.size());
-    ArrayW<UnityEngine::Vector2> uvs(data.vertices.size());
     ArrayW<int>                  tris(data.triangles.size());
     for (size_t i = 0; i < data.vertices.size(); ++i) {
         verts[i] = UnityEngine::Vector3(data.vertices[i].x, data.vertices[i].y, data.vertices[i].z);
         cols[i]  = UnityEngine::Color(1.f, 1.f, 1.f, data.alphas[i]);
-        uvs[i]   = UnityEngine::Vector2(data.uAge[i], (float)(i & 1));   // u = 0 newest .. 1 oldest, v = across the ribbon
     }
     for (size_t i = 0; i < data.triangles.size(); ++i) tris[i] = data.triangles[i];
     mesh->set_vertices(verts);
     mesh->set_colors(cols);
-    mesh->set_uv(uvs);
     mesh->set_triangles(tris);
     mesh->RecalculateBounds();
 }

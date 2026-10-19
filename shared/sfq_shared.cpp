@@ -98,8 +98,8 @@ TrailMeshData TrailHistory::build(float now, float width, float duration) {
         V3 inner{p.tip.x + (p.base.x - p.tip.x) * width,
                  p.tip.y + (p.base.y - p.tip.y) * width,
                  p.tip.z + (p.base.z - p.tip.z) * width};
-        m.vertices.push_back(p.tip);  m.alphas.push_back(a);  m.uAge.push_back(age);
-        m.vertices.push_back(inner);  m.alphas.push_back(a);  m.uAge.push_back(age);
+        m.vertices.push_back(p.tip);  m.alphas.push_back(a);
+        m.vertices.push_back(inner);  m.alphas.push_back(a);
     }
     int segs = (int)poses_.size() - 1;
     for (int i = 0; i < segs; ++i) {
