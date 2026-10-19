@@ -33,6 +33,7 @@ struct TrailPose { V3 base, tip; float time = 0; };
 struct TrailMeshData {
     std::vector<V3>    vertices;   // 2 per pose: [tip-side, base-side]
     std::vector<float> alphas;     // 1 per vertex, 0..1 (newest = 1)
+    std::vector<float> uAge;       // 1 per vertex, 0..1 (newest = 0): texture u coordinate along the ribbon
     std::vector<int>   triangles;  // 2 triangles per segment, double sided
 };
 class TrailHistory {
