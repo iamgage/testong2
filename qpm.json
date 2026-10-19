@@ -7,23 +7,61 @@
     "id": "saberfactory-quest",
     "version": "0.1.0",
     "url": null,
-    "additionalData": { "overrideSoName": "libsaberfactory-quest.so", "cmake": true }
+    "additionalData": {
+      "overrideSoName": "libsaberfactory-quest.so",
+      "cmake": true
+    }
   },
   "workspace": {
     "scripts": {
-      "build": ["sh ./scripts/build.sh"],
-      "qmod": ["sh ./scripts/build.sh", "qpm qmod zip"]
+      "build": [
+        "sh ./scripts/build.sh"
+      ],
+      "qmod": [
+        "sh ./scripts/build.sh",
+        "qpm qmod zip"
+      ]
     },
     "ndk": "^27.0.0",
-    "qmodIncludeDirs": ["./build", "./extern/libs"],
+    "qmodIncludeDirs": [
+      "./build",
+      "./extern/libs"
+    ],
     "qmodIncludeFiles": [],
     "qmodOutput": "SaberFactoryQuest.qmod"
   },
   "dependencies": [
-    { "id": "beatsaber-hook", "versionRange": "^6.4.0", "additionalData": {} },
-    { "id": "bs-cordl",       "versionRange": "^4008.0.0", "additionalData": {} },
-    { "id": "scotland2",      "versionRange": "^0.1.6", "additionalData": { "includeQmod": false } },
-    { "id": "custom-types",   "versionRange": "^0.18.0", "additionalData": {} },
-    { "id": "bsml",           "versionRange": "^0.4.0", "additionalData": {} }
+    {
+      "id": "beatsaber-hook",
+      "versionRange": "^6.4.0",
+      "additionalData": {}
+    },
+    {
+      "id": "bs-cordl",
+      "versionRange": "^4008.0.0",
+      "additionalData": {}
+    },
+    {
+      "id": "scotland2",
+      "versionRange": "^0.1.6",
+      "additionalData": {
+        "includeQmod": false
+      }
+    },
+    {
+      "id": "custom-types",
+      "versionRange": "^0.18.0",
+      "additionalData": {}
+    },
+    {
+      "id": "bsml",
+      "versionRange": "^0.4.0",
+      "additionalData": {}
+    },
+    {
+      "id": "paper2_scotland2",
+      "versionRange": "*",
+      "additionalData": {}
+    }
   ]
 }
