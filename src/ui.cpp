@@ -7,6 +7,7 @@
 
 #include "bsml/shared/BSML.hpp"
 #include "bsml/shared/BSML-Lite.hpp"
+#include "HMUI/ViewController.hpp"
 #include "UnityEngine/GameObject.hpp"
 #include "UnityEngine/Transform.hpp"
 
@@ -23,8 +24,9 @@ static void header(UnityEngine::Transform* t, const char* text) {
     BSML::Lite::CreateText(t, s);
 }
 
-static void build(UnityEngine::GameObject* self) {
-    auto* t = BSML::Lite::CreateScrollableSettingsContainer(self->get_transform())->get_transform();
+static void build(HMUI::ViewController* self) {
+    // get_transform() returns a UnityW<>, which converts implicitly to a raw pointer (but not via `auto*`).
+    UnityEngine::Transform* t = BSML::Lite::CreateScrollableSettingsContainer(self->get_transform())->get_transform();
     sfq::prepareSelection();                 // loads/creates config so values below are current
     const Config cfg = sfq::config();
 
@@ -57,20 +59,4 @@ static void build(UnityEngine::GameObject* self) {
     BSML::Lite::CreateToggle(t, "Enable trail", cfg.trailEnabled,
         [](bool v) { sfq::updateConfig([&](Config& c) { c.trailEnabled = v; }); });
     BSML::Lite::CreateSliderSetting(t, "Trail width", 0.05f, cfg.trailWidth, 0.05f, 1.0f,
-        [](float v) { sfq::updateConfig([&](Config& c) { c.trailWidth = v; }); });
-    BSML::Lite::CreateSliderSetting(t, "Trail duration (s)", 0.05f, cfg.trailDuration, 0.05f, 2.0f,
-        [](float v) { sfq::updateConfig([&](Config& c) { c.trailDuration = v; }); });
-}
-
-void registerMenu() {
-    BSML::Init();
-    BSML::Register::RegisterSettingsMenu("SaberFactory",
-        [](UnityEngine::GameObject* self, bool firstActivation) {
-            if (!firstActivation) return;
-            try { build(self); } catch (const std::exception& e) { SFQ_ERR("ui build failed: %s", e.what()); }
-        },
-        true);
-    SFQ_LOG("settings menu registered");
-}
-
-}  // namespace sfq::ui
+        [](float v) {
