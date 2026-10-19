@@ -77,9 +77,12 @@ static void unloadBundle() {
 // the exact generated wrapper for AssetBundle::LoadAsset in the installed bs-cordl).
 template <typename T>
 static T* loadAsset(UnityEngine::AssetBundle* b, const char* name, System::Type* type) {
-    auto r = il2cpp_utils::RunMethod<UnityEngine::Object*, false>(b, "LoadAsset", StringW(name), type);
-    if (!r) return nullptr;
-    return reinterpret_cast<T*>(*r);
+    try {
+        UnityEngine::Object* r = il2cpp_utils::RunMethodRethrow<UnityEngine::Object*, false>(b, "LoadAsset", StringW(name), type);
+        return reinterpret_cast<T*>(r);
+    } catch (...) {
+        return nullptr;
+    }
 }
 
 bool prepareSelection() {
@@ -96,7 +99,7 @@ bool prepareSelection() {
     int idx = indexOfName(list, g_cfg.selected);
     if (idx < 0) { SFQ_ERR("Saber '%s' not found in %s", g_cfg.selected.c_str(), kSabers.c_str()); return false; }
 
-    auto* bundle = UnityEngine::AssetBundle::LoadFromFile(StringW(list[idx].path));
+    UnityEngine::AssetBundle* bundle = UnityEngine::AssetBundle::LoadFromFile(StringW(list[idx].path));
     if (!bundle) {
         SFQ_ERR("LoadFromFile failed for %s (bundle must be built for Android/ASTC, not PC)", list[idx].path.c_str());
         return false;
@@ -150,12 +153,17 @@ void equip(GlobalNamespace::SaberModelController* controller, GlobalNamespace::S
     const int hi = handIndex(saber);
     const char* childName = hi == 0 ? kLeftName : kRightName;
 
-    auto inst = il2cpp_utils::RunMethod<UnityEngine::Object*, false>(
-        classof(UnityEngine::Object*), "Instantiate", reinterpret_cast<UnityEngine::Object*>(g_prefab.ptr()));
-    if (!inst || !*inst) { SFQ_ERR("Instantiate failed"); return; }
-    auto* root = reinterpret_cast<UnityEngine::GameObject*>(*inst);
+    UnityEngine::GameObject* root = nullptr;
+    try {
+        UnityEngine::Object* o = il2cpp_utils::RunMethodRethrow<UnityEngine::Object*, false>(
+            classof(UnityEngine::Object*), "Instantiate", reinterpret_cast<UnityEngine::Object*>(g_prefab.ptr()));
+        root = reinterpret_cast<UnityEngine::GameObject*>(o);
+    } catch (...) {
+        root = nullptr;
+    }
+    if (!root) { SFQ_ERR("Instantiate failed"); return; }
 
-    auto* child = root->get_transform()->Find(StringW(childName));
+    UnityEngine::Transform* child = root->get_transform()->Find(StringW(childName));
     if (!child) {
         SFQ_ERR("Prefab has no child '%s'", childName);
         UnityEngine::Object::Destroy(root);
@@ -164,7 +172,7 @@ void equip(GlobalNamespace::SaberModelController* controller, GlobalNamespace::S
 
     hideVanilla(controller);
 
-    auto* parent = controller->get_transform();
+    UnityEngine::Transform* parent = controller->get_transform();
     child->SetParent(parent, false);
     child->set_localPosition(UnityEngine::Vector3::get_zero());
     child->set_localRotation(UnityEngine::Quaternion::get_identity());
@@ -174,10 +182,10 @@ void equip(GlobalNamespace::SaberModelController* controller, GlobalNamespace::S
     Hand& h = g_hands[hi];
     destroyTrail(h);
     if (g_cfg.trailEnabled && g_trailMat && g_trailMat.isAlive()) {
-        auto* go = UnityEngine::GameObject::New_ctor(StringW(hi == 0 ? "SFQTrailL" : "SFQTrailR"));
-        auto* mf = go->AddComponent<UnityEngine::MeshFilter*>();
-        auto* mr = go->AddComponent<UnityEngine::MeshRenderer*>();
-        auto* mesh = UnityEngine::Mesh::New_ctor();
+        UnityEngine::GameObject* go = UnityEngine::GameObject::New_ctor(StringW(hi == 0 ? "SFQTrailL" : "SFQTrailR"));
+        UnityEngine::MeshFilter* mf = go->AddComponent<UnityEngine::MeshFilter*>();
+        UnityEngine::MeshRenderer* mr = go->AddComponent<UnityEngine::MeshRenderer*>();
+        UnityEngine::Mesh* mesh = UnityEngine::Mesh::New_ctor();
         mf->set_sharedMesh(mesh);
         mr->set_sharedMaterial(g_trailMat.ptr());
         h.trailGO.emplace(go); h.mesh.emplace(mesh); h.saber = saber;
