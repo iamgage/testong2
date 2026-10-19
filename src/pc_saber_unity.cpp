@@ -22,6 +22,7 @@
 #include "UnityEngine/Mesh.hpp"
 #include "UnityEngine/Material.hpp"
 #include "UnityEngine/Shader.hpp"
+#include "UnityEngine/Resources.hpp"
 #include "UnityEngine/Texture.hpp"
 #include "UnityEngine/Texture2D.hpp"
 #include "UnityEngine/TextureFormat.hpp"
@@ -46,11 +47,15 @@ static std::vector<SafePtrUnity<UnityEngine::Mesh>>      g_meshes;
 static std::vector<SafePtrUnity<UnityEngine::Texture2D>> g_textures;
 static std::vector<SafePtrUnity<UnityEngine::Material>>  g_materials;
 static SafePtrUnity<UnityEngine::Material>               g_defaultMat;
+// Name -> shader table of everything loaded in the game, filled lazily (see findLoadedShader).
+static std::map<std::string, UnityEngine::Shader*> g_loadedShaders;
+static bool g_loadedShadersScanned = false;
 
 void unload() {
     g_saber = pc::Saber{};
     g_loaded = false; g_built = false;
     g_meshes.clear(); g_textures.clear(); g_materials.clear();
+    g_loadedShaders.clear(); g_loadedShadersScanned = false;
     g_defaultMat.emplace(nullptr);
 }
 bool loaded() { return g_loaded; }
@@ -158,8 +163,32 @@ static UnityEngine::Texture2D* makeTexture(const pc::Texture& t) {
     return tex;
 }
 
+// Shader.Find only sees shaders in the player's name table; shaders that arrived inside another mod's asset bundle
+// (e.g. "BeatSaber/Unlit Glow" here) are loaded but not findable that way. So also search the loaded shaders by name.
+
+static UnityEngine::Shader* findLoadedShader(const char* name) {
+    if (!g_loadedShadersScanned) {
+        g_loadedShadersScanned = true;
+        try {
+            auto all = UnityEngine::Resources::FindObjectsOfTypeAll(csTypeOf(UnityEngine::Shader*));
+            for (auto o : all) {
+                if (!o) continue;
+                StringW n = o->get_name();
+                if (!n) continue;
+                g_loadedShaders.emplace(std::string(n), reinterpret_cast<UnityEngine::Shader*>(o.ptr()));
+            }
+            SFQ_LOG("scanned %d loaded shaders for name lookup", (int)g_loadedShaders.size());
+        } catch (...) { SFQ_ERR("loaded shader scan failed"); }
+    }
+    auto it = g_loadedShaders.find(name);
+    return it == g_loadedShaders.end() ? nullptr : it->second;
+}
+
 static UnityEngine::Shader* findShader(const char* name) {
     UnityEngine::Shader* s = UnityEngine::Shader::Find(StringW(name));
+    if (s) return s;
+    s = findLoadedShader(name);
+    if (s) SFQ_LOG("shader '%s' found among loaded shaders (Shader.Find missed it)", name);
     return s;
 }
 
