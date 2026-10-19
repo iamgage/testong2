@@ -186,7 +186,10 @@ static void dumpShaders() {
     try {
         auto all = UnityEngine::Resources::FindObjectsOfTypeAll(csTypeOf(UnityEngine::Shader*));
         SFQ_LOG("shaders available in this game: %d", (int)all.size());
-        for (auto* o : all) if (o) SFQ_LOG("  shader: %s", nameOf(o->get_name()).c_str());
+        for (auto o : all) {   // elements are UnityW<Object> wrappers in this SDK version, not raw pointers
+            if (!o) continue;
+            SFQ_LOG("  shader: %s", nameOf(o->get_name()).c_str());
+        }
     } catch (...) { SFQ_ERR("could not list shaders"); }
 }
 
