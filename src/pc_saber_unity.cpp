@@ -181,10 +181,19 @@ static UnityEngine::Shader* resolveShader(const std::string& pcName, UnityEngine
     return fallback;
 }
 
-static UnityEngine::Material* makeMaterial(const pc::Material& m, UnityEngine::Shader* fallback) {
-    UnityEngine::Shader* shader = resolveShader(m.shader, fallback);
-    if (!shader) return nullptr;
-    UnityEngine::Material* mat = UnityEngine::Material::New_ctor(shader);
+static UnityEngine::Material* makeMaterial(const pc::Material& m, UnityEngine::Material* tmpl) {
+    UnityEngine::Shader* shader = resolveShader(m.shader, nullptr);   // mapped / same-name shader that really exists in the game
+    UnityEngine::Material* mat = nullptr;
+    if (shader) {
+        mat = UnityEngine::Material::New_ctor(shader);
+        SFQ_LOG("material '%s': using game shader for '%s'", m.name.c_str(), m.shader.c_str());
+    } else if (tmpl) {
+        mat = UnityEngine::Material::New_ctor(tmpl);   // copy of the vanilla saber material (keeps its working values)
+        SFQ_LOG("material '%s': shader '%s' not in game -> copy of the vanilla saber material", m.name.c_str(), m.shader.c_str());
+    } else {
+        SFQ_ERR("material '%s': shader '%s' not in game and no vanilla material to copy -> no material", m.name.c_str(), m.shader.c_str());
+        return nullptr;
+    }
     mat->set_hideFlags(UnityEngine::HideFlags::DontUnloadUnusedAsset);
     for (auto& kw : [&] { std::vector<std::string> v; std::istringstream ss(m.keywords); std::string w; while (ss >> w) v.push_back(w); return v; }())
         mat->EnableKeyword(StringW(kw));
@@ -205,7 +214,7 @@ static UnityEngine::Material* makeMaterial(const pc::Material& m, UnityEngine::S
     return mat;
 }
 
-static void buildAssets(UnityEngine::Shader* fallback) {
+static void buildAssets(UnityEngine::Material* tmpl) {
     if (g_built) return;
     for (auto& m : g_saber.meshes) {
         SafePtrUnity<UnityEngine::Mesh> sp; sp.emplace(makeMesh(m)); g_meshes.push_back(sp);
@@ -214,10 +223,10 @@ static void buildAssets(UnityEngine::Shader* fallback) {
         SafePtrUnity<UnityEngine::Texture2D> sp; sp.emplace(makeTexture(t)); g_textures.push_back(sp);
     }
     for (auto& m : g_saber.materials) {
-        SafePtrUnity<UnityEngine::Material> sp; sp.emplace(makeMaterial(m, fallback)); g_materials.push_back(sp);
+        SafePtrUnity<UnityEngine::Material> sp; sp.emplace(makeMaterial(m, tmpl)); g_materials.push_back(sp);
     }
-    if (fallback) {
-        UnityEngine::Material* d = UnityEngine::Material::New_ctor(fallback);
+    if (tmpl) {
+        UnityEngine::Material* d = UnityEngine::Material::New_ctor(tmpl);
         d->set_hideFlags(UnityEngine::HideFlags::DontUnloadUnusedAsset);
         g_defaultMat.emplace(d);
     }
@@ -256,12 +265,13 @@ static UnityEngine::Transform* buildNode(int idx, UnityEngine::Transform* parent
     }
     for (int c : n.children) buildNode(c, t, layer, depth + 1);
     go->SetActive(n.active);
+    if (depth == 0) SFQ_LOG("pc saber hand tree built (root '%s', active=%d)", n.name.c_str(), (int)n.active);
     return t;
 }
 
-UnityEngine::Transform* instantiateHand(int hand, int layer, UnityEngine::Shader* fallbackShader) {
+UnityEngine::Transform* instantiateHand(int hand, int layer, UnityEngine::Material* templateMat) {
     if (!g_loaded) return nullptr;
-    buildAssets(fallbackShader);
+    buildAssets(templateMat);
     return buildNode(hand == 0 ? g_saber.left : g_saber.right, nullptr, layer, 0);
 }
 

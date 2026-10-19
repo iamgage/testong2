@@ -54,8 +54,6 @@ static void build(HMUI::ViewController* self) {
         BSML::Lite::CreateText(t, "<size=80%>No sabers found. Put Android-built .saber files in\n"
                                   "ModData/com.beatgames.beatsaber/Mods/SaberFactoryQuest/Sabers</size>");
 
-    BSML::Lite::CreateText(t, "<size=75%>PC Unity AssetBundles are not yet supported. A .saber filename alone does not indicate Android compatibility.</size>");
-
     // ---- Trail ----
     header(t, "Trail");
     BSML::Lite::CreateToggle(t, "Enable trail", cfg.trailEnabled,

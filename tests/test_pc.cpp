@@ -115,6 +115,18 @@ int main(int argc, char** argv) {
         CHECK(st.rgba[0] == 10 && st.rgba[3] == 40 && st.rgba[15] == 160);
     }
 
+    // ---- Unity 2018.1.6f1 bundles (very common for older CustomSabers) must convert, meshes included ----
+    {
+        auto f18 = slurp(dir + "/test2018.saber");
+        CHECK(!f18.empty());
+        pc::Saber s18; std::string e18;
+        CHECK(pc::convertBundle(f18, s18, e18));
+        CHECK(s18.unityVersion == "2018.1.6f1");
+        CHECK(s18.warnings.empty());
+        CHECK(s18.meshes.size() == 1 && s18.meshes[0].vertexCount() == 3);
+        CHECK(s18.left >= 0 && s18.nodes[s18.left].mesh == 0);
+    }
+
     // ---- error reporting ----
     {
         pc::Saber s2; std::string e2;

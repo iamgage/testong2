@@ -15,8 +15,10 @@ void unload();
 
 // Builds a fresh copy of the given hand's object tree (0 = LeftSaber, 1 = RightSaber), unparented.
 // Unity assets (meshes/textures/materials) are created on first use and shared between hands.
-// `fallbackShader` (taken from the vanilla saber) is used when a bundle shader isn't in the game.
-UnityEngine::Transform* instantiateHand(int hand, int layer, UnityEngine::Shader* fallbackShader);
+// `templateMat` (the vanilla saber's own material) is *copied* for every bundle material whose shader isn't in the game,
+// so the result keeps the values the game's saber shader needs (a fresh material would get the shader's defaults,
+// which can render fully transparent/black).
+UnityEngine::Transform* instantiateHand(int hand, int layer, UnityEngine::Material* templateMat);
 
 // Material of the saber's CustomTrail for that hand, or nullptr. Valid after instantiateHand().
 UnityEngine::Material* trailMaterial(int hand);

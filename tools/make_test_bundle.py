@@ -183,12 +183,12 @@ objs = [  # (pathId, classId, tree, value)
     (16, 21, MAT_T, mat_trail),
 ]
 
-def build_serialized():
+def build_serialized(unity="2019.4.28f1"):
     classes = []
     for _, cid, tree, _ in objs:
         if cid not in [c for c, _ in classes]: classes.append((cid, tree))
     meta = bytearray()
-    meta += b"2019.4.28f1\0" + struct.pack("<i", 19) + b"\x01"       # unity version, StandaloneWindows64, type trees on
+    meta += unity.encode() + b"\0" + struct.pack("<i", 19) + b"\x01"       # unity version, StandaloneWindows64, type trees on
     meta += struct.pack("<I", len(classes))
     for cid, tree in classes:
         meta += struct.pack("<iBh", cid, 0, -1)
@@ -243,7 +243,7 @@ def lz4_compress(data):
     emit(data[anchor:], 0, 0)
     return bytes(out)
 
-def build_bundle(ser, res):
+def build_bundle(ser, res, unity="2019.4.28f1"):
     files = [(CAB, 4, ser), (CAB + ".resS", 0, res)]
     allb = bytearray(); nodes = []
     for name, fl, d in files:
@@ -258,7 +258,7 @@ def build_bundle(ser, res):
     for off, size, fl, name in nodes:
         info += struct.pack(">qqI", off, size, fl) + name.encode() + b"\0"
     cinfo = lz4_compress(bytes(info))
-    hdr = b"UnityFS\0" + struct.pack(">I", 6) + b"5.x.x\0" + b"2019.4.28f1\0"
+    hdr = b"UnityFS\0" + struct.pack(">I", 6) + b"5.x.x\0" + unity.encode() + b"\0"
     total = len(hdr) + 8 + 12 + len(cinfo) + sum(len(c) for _, c in comp_chunks)
     hdr += struct.pack(">qIII", total, len(cinfo), len(info), 2 | 0x40)
     return hdr + cinfo + b"".join(c for _, c in comp_chunks)
@@ -268,6 +268,9 @@ def main(out):
     ser = build_serialized()
     open(os.path.join(out, "test.saber"), "wb").write(build_bundle(ser, res_s + b"\x00" * 4096 + res_s * 8))
     open(os.path.join(out, "serialized.bin"), "wb").write(ser)
+    # Same content stamped as Unity 2018.1.6f1 (the version most older CustomSabers bundles were built with).
+    u18 = "2018.1.6f1"
+    open(os.path.join(out, "test2018.saber"), "wb").write(build_bundle(build_serialized(u18), res_s + b"\x00" * 4096 + res_s * 8, u18))
     rnd = random.Random(7)
     blob = bytearray()
     for _ in range(400):

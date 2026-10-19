@@ -172,7 +172,9 @@ struct Ctx {
         Value m;
         if (!read(id, m)) return -1;
         Mesh mesh; mesh.name = m["m_Name"].s;
-        if (sf.unityMajor < 2019) { warn("mesh '" + mesh.name + "': Unity " + sf.unityVersion + " vertex layout not supported (need 2019+)"); return -1; }
+        // The channel format enum (float/half/unorm8/...) is the same from Unity 2017 on. Older CustomSabers bundles are
+        // very commonly built with 2018.1.6f1, so those must work. Before 2017 the enum differs -> not supported.
+        if (sf.unityMajor < 2017) { warn("mesh '" + mesh.name + "': Unity " + sf.unityVersion + " vertex layout not supported (need 2017+)"); return -1; }
         if (m["m_MeshCompression"].asInt() != 0) { warn("mesh '" + mesh.name + "': uses mesh compression (re-export with compression Off)"); return -1; }
         const Value& vd = m["m_VertexData"];
         const size_t count = (size_t)vd["m_VertexCount"].asInt();
@@ -206,8 +208,9 @@ struct Ctx {
                     dst[v * comps + k] = k < c.dim ? readComp(p + k * fs, c.fmt) : (k == 3 && comps == 4 ? 1.f : 0.f);
             }
         };
-        readCh(0, 3, mesh.pos); readCh(1, 3, mesh.normals); readCh(2, 4, mesh.tangents);
-        readCh(3, 4, mesh.colors); readCh(4, 2, mesh.uv0); readCh(5, 2, mesh.uv1);
+        readCh(0, 3, mesh.pos); readCh(1, 3, mesh.normals);
+        if (sf.unityMajor < 2018) { readCh(2, 4, mesh.colors); readCh(3, 2, mesh.uv0); readCh(4, 2, mesh.uv1); readCh(5, 4, mesh.tangents); }
+        else                      { readCh(2, 4, mesh.tangents); readCh(3, 4, mesh.colors); readCh(4, 2, mesh.uv0); readCh(5, 2, mesh.uv1); }
         if (mesh.pos.empty()) throw ParseError("mesh has no positions");
 
         const auto& ib = m["m_IndexBuffer"].bytes;
@@ -429,6 +432,22 @@ bool convertBundle(const std::vector<uint8_t>& bytes, Saber& out, std::string& e
         out.left = findChild(out, out.root, "LeftSaber");
         out.right = findChild(out, out.root, "RightSaber");
         if (out.left < 0 || out.right < 0) { err = "prefab '_CustomSaber' needs children 'LeftSaber' and 'RightSaber'"; return false; }
+        // A saber whose meshes all failed to convert would load "successfully" and be invisible in game. Fail instead so the
+        // caller falls back to the vanilla saber, and say why.
+        auto hasMesh = [&](int hand) {
+            std::vector<int> st{hand};
+            while (!st.empty()) {
+                int n = st.back(); st.pop_back();
+                if (out.nodes[n].mesh >= 0) return true;
+                for (int c : out.nodes[n].children) st.push_back(c);
+            }
+            return false;
+        };
+        if (!hasMesh(out.left) && !hasMesh(out.right)) {
+            err = "no usable meshes under LeftSaber/RightSaber";
+            if (!out.warnings.empty()) err += " (" + out.warnings.front() + ")";
+            return false;
+        }
         return true;
     } catch (const ParseError& e) {
         err = e.what();

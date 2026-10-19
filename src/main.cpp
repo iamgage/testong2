@@ -30,7 +30,10 @@ MAKE_HOOK_MATCH(SaberModelController_Init, &GlobalNamespace::SaberModelControlle
 #endif
     // Never let a mod failure take the game down: fall back to the vanilla saber.
     try {
-        if (sfq::prepareSelection()) sfq::equip(self, saber);
+        const bool ready = sfq::prepareSelection();
+        SFQ_LOG("SaberModelController.Init: enabled=%d selected='%s' -> %s", sfq::config().enabled ? 1 : 0,
+                sfq::config().selected.c_str(), ready ? "custom saber ready" : "NOT ready, vanilla saber stays");
+        if (ready) sfq::equip(self, saber);
     } catch (const std::exception& e) {
         SFQ_ERR("equip failed: %s", e.what());
     } catch (...) {
@@ -44,6 +47,7 @@ MAKE_HOOK_MATCH(Saber_ManualUpdate, &GlobalNamespace::Saber::ManualUpdate, void,
 }
 
 extern "C" __attribute__((visibility("default"))) void setup(CModInfo* info) noexcept {
+    sfqLogInit();
     info->id = "saberfactory-quest";
     info->version = "0.1.0";
     info->version_long = 0;
