@@ -1,0 +1,64 @@
+name: Build SaberFactory Quest qmod
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Host tests (portable logic)
+        run: sh tools/host_test.sh
+
+      - name: Install Android NDK r27
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+          link-to-sdk: true
+
+      - name: Install ninja
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Install qpm
+        run: |
+          set -x
+          curl -fsSL -o qpm.zip https://github.com/QuestPackageManager/QPM.CLI/releases/latest/download/qpm-linux-x64.zip \
+            && unzip -o qpm.zip -d qpm-bin && chmod +x qpm-bin/qpm && sudo mv qpm-bin/qpm /usr/local/bin/qpm \
+            || { curl -fsSL https://sh.rustup.rs | sh -s -- -y && . "$HOME/.cargo/env" \
+                 && cargo install --git https://github.com/QuestPackageManager/QPM.CLI --locked \
+                 && sudo cp "$HOME/.cargo/bin/qpm" /usr/local/bin/qpm; }
+          qpm --version
+
+      - name: Restore dependencies
+        run: qpm restore 2>&1 | tee restore.log
+
+      - name: Build + package qmod
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: |
+          set -o pipefail
+          qpm qmod manifest 2>&1 | tee manifest.log || true
+          sh scripts/build.sh 2>&1 | tee build.log
+          qpm qmod zip 2>&1 | tee package.log
+
+      - name: Upload qmod
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SaberFactoryQuest-qmod
+          path: "*.qmod"
+
+      - name: Upload logs (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            *.log
+            mod.json
+            qpm.json
+            qpm_defines.cmake
+            extern.cmake
+          if-no-files-found: ignore
