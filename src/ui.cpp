@@ -59,4 +59,20 @@ static void build(HMUI::ViewController* self) {
     BSML::Lite::CreateToggle(t, "Enable trail", cfg.trailEnabled,
         [](bool v) { sfq::updateConfig([&](Config& c) { c.trailEnabled = v; }); });
     BSML::Lite::CreateSliderSetting(t, "Trail width", 0.05f, cfg.trailWidth, 0.05f, 1.0f,
-        [](float v) {
+        [](float v) { sfq::updateConfig([&](Config& c) { c.trailWidth = v; }); });
+    BSML::Lite::CreateSliderSetting(t, "Trail duration (s)", 0.05f, cfg.trailDuration, 0.05f, 2.0f,
+        [](float v) { sfq::updateConfig([&](Config& c) { c.trailDuration = v; }); });
+}
+
+void registerMenu() {
+    BSML::Init();
+    BSML::Register::RegisterSettingsMenu("SaberFactory",
+        [](HMUI::ViewController* self, bool firstActivation, bool /*addedToHierarchy*/, bool /*screenSystemEnabling*/) {
+            if (!firstActivation) return;
+            try { build(self); } catch (const std::exception& e) { SFQ_ERR("ui build failed: %s", e.what()); }
+        },
+        true);
+    SFQ_LOG("settings menu registered");
+}
+
+}  // namespace sfq::ui
